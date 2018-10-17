@@ -34,12 +34,7 @@ class SequenceReverseOp : public framework::OperatorWithKernel {
                       "Rank of Input(X) must be not less than 2.");
 
     ctx->SetOutputDim("Y", x_dim);
-
-    // set lod inside infershape in compile time
-    // set lod inside opkernel in runtime because backward needs to set lod too
-    if (!ctx->IsRuntime()) {
-      ctx->ShareLoD("X", "Y");
-    }
+    ctx->ShareLoD("X", "Y");
   }
 };
 
@@ -58,15 +53,14 @@ Reverse the sequence according to LoD.
 
 template <typename T>
 struct SequenceReverseFunctor {
-  SequenceReverseFunctor(const T *x, T *y, const size_t *lod, size_t row_numel,
-                         size_t lod_count)
-      : x_(x), y_(y), lod_(lod), row_numel_(row_numel), lod_count_(lod_count) {}
+  SequenceReverseFunctor(const T *x, T *y, const size_t *lod, size_t lod_count,
+                         size_t row_numel)
+      : x_(x), y_(y), lod_(lod), lod_count_(lod_count), row_numel_(row_numel) {}
 
   HOSTDEVICE void operator()(size_t idx_x) const {
     auto row_idx_x = idx_x / row_numel_;
-    auto lod_idx =
-        math::LowerBound(lod_, static_cast<int64_t>(lod_count_), row_idx_x);
-    auto row_idx_y = lod_[lod_idx] + (lod_[lod_idx + 1] - 1 - row_idx_x);
+    auto lod_idx = math::UpperBound(lod_, lod_count_, row_idx_x);
+    auto row_idx_y = lod_[lod_idx - 1] + (lod_[lod_idx] - 1 - row_idx_x);
     auto idx_y = row_idx_y * row_numel_ + idx_x % row_numel_;
     y_[idx_y] = x_[idx_x];
   }
@@ -74,8 +68,8 @@ struct SequenceReverseFunctor {
   const T *x_;
   T *y_;
   const size_t *lod_;
-  size_t row_numel_;
   size_t lod_count_;
+  size_t row_numel_;
 };
 
 template <typename DeviceContext, typename T>
@@ -112,12 +106,10 @@ class SequenceReverseOpKernel : public framework::OpKernel<T> {
     PADDLE_ENFORCE_NE(x_data, y_data,
                       "SequenceReverse Op does not support in-place operation");
 
-    SequenceReverseFunctor<T> functor(x_data, y_data, lod, row_numel,
-                                      lod_count);
+    SequenceReverseFunctor<T> functor(x_data, y_data, lod, lod_count,
+                                      row_numel);
     platform::ForRange<DeviceContext> for_range(dev_ctx, limit);
     for_range(functor);
-
-    y->set_lod(x.lod());
   }
 };
 
