@@ -44,9 +44,34 @@ class SequenceReverseOpMaker : public framework::OpProtoAndCheckerMaker {
     AddInput("X", "The input LoDTensor of sequence_reverse op.");
     AddOutput("Y", "The output LoDTensor of sequence_reverse op.");
     AddComment(R"DOC(
-SequenceReverse Operator
+SequenceReverse Operator.
 
-Reverse the sequence according to LoD.
+Reverse each sequence in input X along dim 0.
+
+Assuming X is a LoDTensor with dims [5, 4] and lod [[0, 2, 5]], where:
+
+X.data() = [
+  [1, 2, 3, 4],
+  [5, 6, 7, 8], # the 0-th sequence with length 2
+  [9, 10, 11, 12],
+  [13, 14, 15, 16],
+  [17, 18, 19, 20] # the 1-st sequence with length 3
+]
+
+The output Y would be a LoDTensor sharing the same dims and lod with input X,
+and:
+
+Y.data() = [
+  [5, 6, 7, 8],
+  [1, 2, 3, 4], # the reversed 0-th sequence with length 2
+  [17, 18, 19, 20],
+  [13, 14, 15, 16],
+  [9, 10, 11, 12] # the reversed 1-st sequence with length 3
+]
+
+This Operator is useful to build a reverse dynamic RNN network.
+
+This Operator only supports one-level lod currently.
     )DOC");
   }
 };
