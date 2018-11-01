@@ -7580,4 +7580,3 @@ def hash(input, hash_size, num_hash=1, name=None):
         attrs={'num_hash': num_hash,
                'mod_by': hash_size})
     return out
->>>>>>> 9c6ed0164a77a35c816c8722b5a8c75fc29469ab
