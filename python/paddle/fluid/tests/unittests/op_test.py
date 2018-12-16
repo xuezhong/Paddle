@@ -448,6 +448,7 @@ class OpTest(unittest.TestCase):
         ]
         analytic_grads = self._get_gradient(inputs_to_check, place,
                                             output_names, no_grad_set)
+        #import pdb; pdb.set_trace()
 
         self.__assert_is_close(numeric_grads, analytic_grads, inputs_to_check,
                                max_relative_error,
