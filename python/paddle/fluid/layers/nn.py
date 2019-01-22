@@ -4777,8 +4777,9 @@ def softmax_with_cross_entropy(logits,
 def sample_logits(logits,
                   label,
                   num_samples,
-                                       remove_accidental_hits=True,
-                                       seed=0):
+                  uniq=True,
+                  remove_accidental_hits=True,
+                  seed=0):
     """
     **Sampled Softmax With Cross Entropy Operator.**
 
@@ -4843,7 +4844,7 @@ def sample_logits(logits,
     sampled_label = helper.create_variable_for_type_inference(dtype='int64')
 
     helper.append_op(
-        type='sampled_softmax_with_cross_entropy',
+        type='sample_logits',
         inputs={'Logits': logits,
                 'Label': label},
         outputs={
@@ -4852,11 +4853,12 @@ def sample_logits(logits,
             'SampledLogits': sampled_logits
         },
         attrs={
+            'uniq': uniq,
             'remove_accidental_hits': remove_accidental_hits,
             'num_samples': num_samples,
             'seed': seed
         })
-    return sampled_logits, sampled_label
+    return sampled_logits, sampled_label, samples
 
 
 def smooth_l1(x, y, inside_weight=None, outside_weight=None, sigma=None):

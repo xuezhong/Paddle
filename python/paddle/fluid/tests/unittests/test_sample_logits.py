@@ -17,7 +17,6 @@ from __future__ import print_function
 import unittest
 import numpy as np
 from op_test import OpTest
-from test_softmax_op import stable_softmax
 
 
 class Sampler(object):
@@ -121,6 +120,9 @@ def sample_logits(logits,
         samples, probabilities = sample_prob(sampler, num_samples, label)
     sampled_logits = take_along_axis1(logits, samples)
 
+    print(samples)
+    print(probabilities)
+    print(sampled_logits)
     if remove_accidental_hits:
         compute_remove_accidental_hits(sampled_logits, samples, num_true)
     sampled_logits -= np.log(probabilities)
@@ -299,12 +301,11 @@ class TestSampleLogitsOpV2(OpTest):
                            remove_accidental_hits, use_custom_samples)
 
     def compute(self):
-        fetched_samples = np.array(
-            [[6, 12, 15, 5, 1, 5, 15, 1, 0, 8, 3, 14, 2, 13, 4],
-             [0, 9, 4, 1, 10, 7, 10, 0, 1, 2, 8, 5, 3, 15, 17],
-             [0, 2, 10, 16, 13, 2, 3, 1, 0, 4, 5, 6, 17, 14, 15],
-             [14, 4, 7, 2, 1, 0, 8, 6, 2, 15, 17, 11, 7, 16, 4],
-             [3, 18, 11, 8, 14, 12, 5, 3, 2, 1, 13, 18, 4, 9, 6]])
+        fetched_samples = np.array([[ 6, 12, 15,  5,  1, 13,  0, 17,  5,  2, 13,  5, 10,  0, 14],
+				 [ 0,  9,  4,  1, 10, 17,  1, 18,  3,  0,  5,  5,  4,  0, 15],
+				 [ 0,  2, 10, 16, 13, 13, 13,  2, 14, 15,  0,  1, 18,  2, 14],
+				 [14,  4,  7,  2,  1, 11, 10,  0,  9,  2,  0,  2,  0,  0, 14],
+				 [ 3, 18, 11,  8, 14,  8,  1,  8,  2,  2,  0,  6,  9,  8, 15]])
         fetched_probabilities = np.array([[
             0.610098, 0.403988, 0.344519, 0.664166, 0.950281, 0.664166,
             0.344519, 0.950281, 0.995596, 0.5227, 0.797797, 0.362339, 0.875623,

@@ -100,7 +100,7 @@ class SampleWithProb {
 template <typename T>
 class GPUSampleWithProb {
  public:
-  void operator()(const platform::CUDADeviceContext& context, const int seed, const int dict_size,
+  void operator()(const platform::CUDADeviceContext& context, const int seed, const int dict_size, const bool uniq,
                   const std::size_t num_samples, const Tensor* L, Tensor* S,
                   Tensor* P);
 };

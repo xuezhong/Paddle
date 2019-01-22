@@ -62,12 +62,17 @@ class SampleLogitsOpMaker
     AddOutput("SampledLabel",
               "(Tensor, default: Tensor<int64>), A 2-D tensor. The cross "
               "entropy loss with shape [N x NT].");
-
     AddAttr<bool>(
         "use_custom_samples",
         "An indicator whether to use custom samples with probabilities, if True"
         "the operator will use custom samples and custom probabilities"
         "otherwise, the operator will generate them by itself.")
+        .SetDefault(false);
+    AddAttr<bool>(
+        "uniq",
+        "An indicator whether to sample non-repetitive negtive labels, if True"
+        "the operator will sample negtive labels without replacement."
+        "otherwise, the operator will sample negtive labels with replacement.")
         .SetDefault(false);
     AddAttr<bool>(
         "remove_accidental_hits",
@@ -203,7 +208,7 @@ class SampledSoftmaxGradMaker : public framework::SingleGradOpDescMaker {
  protected:
   std::unique_ptr<framework::OpDesc> Apply() const override {
     auto* grad_op = new framework::OpDesc();
-    grad_op->SetType("sampled_softmax_with_cross_entropy_grad");
+    grad_op->SetType("sample_logits_grad");
     grad_op->SetInput("Logits", Input("Logits"));
     grad_op->SetInput("Label", Input("Label"));
     grad_op->SetInput("Samples", Output("Samples"));

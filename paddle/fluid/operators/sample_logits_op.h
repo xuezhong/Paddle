@@ -264,6 +264,10 @@ class SampleLogitsGradKernel : public framework::OpKernel<T> {
     math::SetConstant<platform::CPUDeviceContext, T> set_zero;
     set_zero(dev_ctx, logits_grad, static_cast<T>(0));
 
+    //const bool remove_accidental_hits =
+    //    context.Attr<bool>("remove_accidental_hits");
+   
+
     // UNDERSTAND: scatter it back to logit_grad
     CPUPutAlongD1<T>(dev_ctx, logits_grad, *samples, *sampled_logits_grad);
   }
