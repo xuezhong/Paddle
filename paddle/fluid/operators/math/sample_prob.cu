@@ -23,7 +23,9 @@ limitations under the License. */
 #include "paddle/fluid/framework/tensor.h"
 #include "paddle/fluid/framework/operator.h"
 #include "paddle/fluid/operators/math/sampler.h"
+#include "paddle/fluid/operators/math/math_function.h"
 #include "paddle/fluid/operators/math/sample_prob.h"
+
 namespace paddle {
 namespace operators {
 namespace math {
@@ -96,7 +98,7 @@ __global__ void SamplingCondidate(const size_t n, const int seed, const int rang
 
 template<typename T>
 __global__ void UniqSamplingCondidate(const size_t n, const int seed, const int range, 
-    const float log_range, const int num_true, const std::size_t num_samples, 
+    const float log_range, const int num_true, const std::size_t num_samples, bool* tmp_data, 
     const int64_t* label_data, int64_t* samples_data, T* probabilities_data) {
   thrust::minstd_rand rng;
   rng.seed(seed);
@@ -130,14 +132,9 @@ __global__ void UniqSamplingCondidate(const size_t n, const int seed, const int 
       ++num_tries;
       int idx = row_idx * row_size + j;
       auto v = sampler.Sample(dist(rng), range, log_range);
-      bool find = false;
-      for(int t = num_true;t < j ; t + 1) {
-        if(samples_data[t] == v) {
-            find = true; 
-        }
-      }
-      if (find == false) {
+      if (tmp_data[row_idx * range +  v] == false) {
         samples_data[idx] = v;
+        tmp_data[row_idx * range + v] = true;
         probabilities_data[idx] = sampler.Probability(samples_data[idx], range);
         ++j;
       }
@@ -168,10 +165,17 @@ void GPUSampleWithProb<T>::operator()(const platform::CUDADeviceContext& context
         S->mutable_data<int64_t>(ret_dim, context.GetPlace());
     T* probabilities_data = P->mutable_data<T>(ret_dim, context.GetPlace());
     if (uniq) {
+      framework::DDim tmp_dim{batch_size, dict_size};
+      Tensor tmp;
+      bool* tmp_data =
+        tmp.mutable_data<bool>(tmp_dim, context.GetPlace()); 
+      math::SetConstant<platform::CUDADeviceContext, bool> set_zero;
+      set_zero(context, &tmp, false);
+
       int threads = 128;
       const size_t size = batch_size; 
       int grid = (size + threads - 1) / threads;
-      UniqSamplingCondidate<T><<<grid, threads, 0, context.stream()>>>(size, seed, dict_size, log(dict_size), num_true, num_samples, label_data, samples_data, probabilities_data); 
+      UniqSamplingCondidate<T><<<grid, threads, 0, context.stream()>>>(size, seed, dict_size, log(dict_size), num_true, num_samples, tmp_data, label_data, samples_data, probabilities_data); 
     } else {
       int threads = 512;
       const size_t size = batch_size * num_sampled_classes; 
