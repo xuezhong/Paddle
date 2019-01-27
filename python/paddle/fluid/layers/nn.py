@@ -4779,6 +4779,9 @@ def sample_logits(logits,
                   num_samples,
                   uniq=True,
                   remove_accidental_hits=True,
+                  use_custom_samples=False,
+                  custom_samples=None,
+                  custom_probabilities=None,
                   seed=0):
     """
     **Sampled Softmax With Cross Entropy Operator.**
@@ -4837,7 +4840,7 @@ def sample_logits(logits,
             out = fluid.layers.sampled_softmax_with_cross_entropy(
                 logits=fc, label=label, num_samples=25)
     """
-    helper = LayerHelper('sampled_softmax_with_cross_entropy', **locals())
+    helper = LayerHelper('sample_logits', **locals())
     samples = helper.create_variable_for_type_inference(dtype='int64')
     sampled_logits \
         = helper.create_variable_for_type_inference(dtype=logits.dtype)
@@ -4846,13 +4849,17 @@ def sample_logits(logits,
     helper.append_op(
         type='sample_logits',
         inputs={'Logits': logits,
-                'Label': label},
+                'Label': label,
+                'CustomSamples': custom_samples,
+                'CustomProbabilities': custom_probabilities
+        },
         outputs={
             'Samples': samples,
             'SampledLabel': sampled_label,
             'SampledLogits': sampled_logits
         },
         attrs={
+            'use_custom_samples': use_custom_samples,
             'uniq': uniq,
             'remove_accidental_hits': remove_accidental_hits,
             'num_samples': num_samples,
