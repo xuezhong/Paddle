@@ -59,38 +59,45 @@ class SampleWithProb {
 
     // temp sets for unique sampling
     std::unordered_set<int64_t> tmp_samples;
-    for (int i = 0; i < batch_size; ++i) {
-      int j = 0;  // column index
-      // add true labels, not that efficient
-      while (j < num_true) {
+    int j = 0;  // column index
+    // add true labels, not that efficient
+    while (j < num_true) {
+      for (int i = 0; i < batch_size; ++i) {
         auto samples_index = i * num_sampled_classes + j;
         auto v = label_data[i * num_true + j];
         samples_data[samples_index] = v;
         probabilities_data[samples_index] = sampler.Probability(v);
-        ++j;
       }
+      ++j;
+    }
 
-      // sample num_samles unique samples for an example, note that they are not
-      // all negative samples
-      tmp_samples.clear();
-      int num_tries = 0;
-      while (j < num_sampled_classes) {
-        ++num_tries;
-        auto v = sampler.Sample();
+    // sample num_samles unique samples for an example, note that they are not
+    // all negative samples
+    tmp_samples.clear();
+    int num_tries = 0;
+    while (j < num_sampled_classes) {
+      ++num_tries;
+      auto v = sampler.Sample();
+      auto insert_ok = tmp_samples.insert(v).second;
+      if (!insert_ok) {
+        continue;
+      }
+      auto p = sampler.Probability(v);
+      for (int i = 0; i < batch_size; ++i) {
         auto samples_index = i * num_sampled_classes + j;
-        if (tmp_samples.insert(v).second) {
-          samples_data[samples_index] = v;
-          probabilities_data[samples_index] = sampler.Probability(v);
-          ++j;
-        }
+	samples_data[samples_index] = v;
+	probabilities_data[samples_index] = p;
       }
+      ++j;
+    }
 
-      // compute Q(y|x), because of unique sampling, probabilities need to be
-      // adjusted
-      for (int k = 0; k < num_sampled_classes; ++k) {
+    // compute Q(y|x), because of unique sampling, probabilities need to be
+    // adjusted
+    for (int k = 0; k < num_sampled_classes; ++k) {
+      for (int i = 0; i < batch_size; ++i) {
         auto samples_index = i * num_sampled_classes + k;
         probabilities_data[samples_index] = adjust_prob(
-            probabilities_data[samples_index], num_samples, num_tries);
+	    probabilities_data[samples_index], num_samples, num_tries);
       }
     }
   }

@@ -154,7 +154,7 @@ class SampleLogitsOp : public framework::OperatorWithKernel {
       const framework::ExecutionContext& ctx) const override {
     auto data_type = framework::GetDataTypeOfVar(ctx.InputVar("Logits"));
     framework::OpKernelType kt = framework::OpKernelType(data_type, ctx.device_context());
-    // kt.place_ = platform::CPUPlace();
+    kt.place_ = platform::CPUPlace();
     return kt;
   }
 };
@@ -195,13 +195,13 @@ class SampleLogitsOpGrad
     auto data_type = framework::GetDataTypeOfVar(
         ctx.InputVar(framework::GradVarName("SampledLogits")));
     framework::OpKernelType kt = framework::OpKernelType(data_type, ctx.device_context());
-    //kt.place_ = platform::CPUPlace();
+    kt.place_ = platform::CPUPlace();
     return kt;
   }
 };
 
 // UNDERSTAND: what's the rule for making a GradMaker TODO
-class SampledSoftmaxGradMaker : public framework::SingleGradOpDescMaker {
+class SampleLogitsGradMaker : public framework::SingleGradOpDescMaker {
  public:
   using framework::SingleGradOpDescMaker::SingleGradOpDescMaker;
 
@@ -228,7 +228,7 @@ namespace ops = paddle::operators;
 REGISTER_OPERATOR(sample_logits,
                   ops::SampleLogitsOp,
                   ops::SampleLogitsOpMaker,
-                  ops::SampledSoftmaxGradMaker);
+                  ops::SampleLogitsGradMaker);
 REGISTER_OPERATOR(sample_logits_grad,
                   ops::SampleLogitsOpGrad);
 REGISTER_OP_CPU_KERNEL(sample_logits,
