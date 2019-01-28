@@ -121,6 +121,7 @@ class SampleLogitsCUDAKernel :
   using Tensor = framework::Tensor;
   template <typename type>
   void Print(Tensor & t, std::string name) const {
+    return;
     if (!FLAGS_debug_print) {
       return;
     }
@@ -250,6 +251,7 @@ class SampleLogitsGradCUDAKernel : public framework::OpKernel<T> {
   using Tensor = framework::Tensor;
   template <typename type>
   void Print(const Tensor & t, std::string name) const {
+    return;
     if (!FLAGS_debug_print) {
       return;
     }

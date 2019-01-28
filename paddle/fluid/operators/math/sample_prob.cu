@@ -65,33 +65,38 @@ __device__ float GPULogUniformSampler::Probability(int64_t value, const float lo
 
 
 template<typename T>
-__global__ void SamplingCondidate(const size_t n, const int* num_tries, const int num_true, const std::size_t num_samples, 
+__global__ void SamplingCondidate(const size_t n, const int* num_tries, const int range, const float log_range, const int num_true, const std::size_t num_samples, 
     const int64_t* label_data, int64_t* samples_data, T* probabilities_data) {
   const int num_sampled_classes = num_true + num_samples;
 
   int idx = blockDim.x * blockIdx.x + threadIdx.x;
   int step_size = 0;
+  GPULogUniformSampler sampler;
 
   for (; idx < n; idx += blockDim.x * gridDim.x) {
     int col_idx = idx % num_sampled_classes;
     int row_idx = idx / num_sampled_classes;
     if (col_idx < num_true) {
       samples_data[idx] = label_data[row_idx * num_true + col_idx];
+      probabilities_data[idx] = sampler.Probability(samples_data[idx], log_range);
+      probabilities_data[idx] = gpu_adjust_prob(
+        probabilities_data[idx], num_samples, num_tries[0]);
+
     } else {
       samples_data[idx] = samples_data[col_idx];
+      probabilities_data[idx] = probabilities_data[col_idx];
+      probabilities_data[idx] = gpu_adjust_prob(
+          probabilities_data[idx], num_samples, num_tries[0]);
     }
-    probabilities_data[idx] = probabilities_data[col_idx];
-    probabilities_data[idx] = gpu_adjust_prob(
-        probabilities_data[idx], num_samples, num_tries[0]);
   } 
 }
 
 template<typename T>
-__global__ void UniqSampler(const size_t n, const int seed, const int range, 
-    const float log_range, const int num_true, const std::size_t num_samples, int* num_tries, bool* dict_data,
+__global__ void UniqSampler(const size_t n, const int seed, const int range, const float log_range, 
+    const int num_true, const std::size_t num_samples, int* num_tries, bool* dict_data,
     int64_t* samples_data, T* probabilities_data) {
   thrust::minstd_rand rng;
-  rng.seed(seed);
+  //rng.seed(seed);
   thrust::uniform_real_distribution<float> dist(0, 1);
   const int num_sampled_classes = num_true + num_samples;
 
@@ -109,7 +114,7 @@ __global__ void UniqSampler(const size_t n, const int seed, const int range,
     if (dict_data[v] == false) {
       samples_data[idx] = v;
       dict_data[v] = true;
-      probabilities_data[idx] = sampler.Probability(samples_data[idx], range);
+      probabilities_data[idx] = sampler.Probability(samples_data[idx], log_range);
       ++j;
     }
   }
@@ -173,16 +178,19 @@ void GPUSampleWithProb<T>::operator()(const platform::CUDADeviceContext& context
     math::SetConstant<platform::CUDADeviceContext, int> set_zero2;
     set_zero2(context, &num_tries, static_cast<int>(0));
 
+    int range = dict_size;
+    float log_range = log(range + 1);
+
     int threads = 1;
     int grid = 1;
     size_t size= 1;
-    UniqSampler<T><<<grid, threads, 0, context.stream()>>>(size, seed, dict_size, log(dict_size), num_true, num_samples, num_tries_data, dict_data, samples_data, probabilities_data);
+    UniqSampler<T><<<grid, threads, 0, context.stream()>>>(size, seed, range, log_range, num_true, num_samples, num_tries_data, dict_data, samples_data, probabilities_data);
       
     //Print<int>(num_tries, "num_tries");
     threads = 512;
     size = batch_size * num_sampled_classes; 
     grid = (batch_size * num_sampled_classes + threads - 1) / threads;
-    SamplingCondidate<T><<<grid, threads, 0, context.stream()>>>(size, num_tries_data, num_true, num_samples, label_data, samples_data, probabilities_data);
+    SamplingCondidate<T><<<grid, threads, 0, context.stream()>>>(size, num_tries_data, range, log_range, num_true, num_samples, label_data, samples_data, probabilities_data);
 };
 
 template class GPUSampleWithProb<float>;
