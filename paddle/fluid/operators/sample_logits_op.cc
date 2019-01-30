@@ -43,7 +43,6 @@ class SampleLogitsOpMaker
         "The customized sample probabilities with true labels at first. This "
         "tensor is only use_custom_samples is true.")
         .AsDispensable();
-
     AddOutput(
         "Samples",
         "(Tensor, default: Tensor<int64_t>), A 2-D tensor with shape [N x "
@@ -53,6 +52,15 @@ class SampleLogitsOpMaker
         "true"
         "labels and S negative labels for each example. This will be used in"
         "backward calculation.")
+        .AsIntermediate();
+     AddOutput(
+        "Probabilities",
+        "(Tensor, default: Tensor<float>), A 2-D tensor with shape [N x "
+        "S+NT]."
+        "The outputs value of progabilites of samples by given the true label, where S is the "
+        "number of negative sample for each example. So Samples includes NT "
+        "true"
+        "labels and S negative labels for each example.")
         .AsIntermediate();
     AddOutput("SampledLogits",
               "(Tensor, default: Tensor<float>), A 2-D tensor with shape"
@@ -129,6 +137,8 @@ class SampleLogitsOp : public framework::OperatorWithKernel {
 
     PADDLE_ENFORCE(ctx->HasOutput("Samples"),
                    "Output(Samples) should be not null.");
+    PADDLE_ENFORCE(ctx->HasOutput("Probabilities"),
+                   "Output(Probabilities) should be not null.");
     PADDLE_ENFORCE(ctx->HasOutput("SampledLogits"),
                    "Output(SampledLogits) should be not null.");
     PADDLE_ENFORCE(ctx->HasOutput("SampledLabel"), "Output(SampledLabel) should be not null.");
@@ -145,6 +155,7 @@ class SampleLogitsOp : public framework::OperatorWithKernel {
     const int num_samples = ctx->Attrs().Get<int>("num_samples");
     const int num_sampled_classes = labels_dims[1] + num_samples;
     ctx->SetOutputDim("Samples", {logits_dims[0], num_sampled_classes});
+    ctx->SetOutputDim("Probabilities", {logits_dims[0], num_sampled_classes});
     ctx->SetOutputDim("SampledLogits", {logits_dims[0], num_sampled_classes});
     ctx->SetOutputDim("SampledLabel", {logits_dims[0], labels_dims[1]});
   }

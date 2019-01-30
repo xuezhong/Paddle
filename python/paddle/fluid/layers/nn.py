@@ -4842,6 +4842,7 @@ def sample_logits(logits,
     """
     helper = LayerHelper('sample_logits', **locals())
     samples = helper.create_variable_for_type_inference(dtype='int64')
+    probabilities = helper.create_variable_for_type_inference(dtype=logits.dtype)
     sampled_logits \
         = helper.create_variable_for_type_inference(dtype=logits.dtype)
     sampled_label = helper.create_variable_for_type_inference(dtype='int64')
@@ -4855,6 +4856,7 @@ def sample_logits(logits,
         },
         outputs={
             'Samples': samples,
+            'Probabilities': probabilities,
             'SampledLabel': sampled_label,
             'SampledLogits': sampled_logits
         },
@@ -4865,7 +4867,7 @@ def sample_logits(logits,
             'num_samples': num_samples,
             'seed': seed
         })
-    return sampled_logits, sampled_label, samples
+    return sampled_logits, sampled_label, samples, probabilities
 
 
 def smooth_l1(x, y, inside_weight=None, outside_weight=None, sigma=None):

@@ -121,7 +121,6 @@ class SampleLogitsCUDAKernel :
   using Tensor = framework::Tensor;
   template <typename type>
   void Print(Tensor & t, std::string name) const {
-    return;
     if (!FLAGS_debug_print) {
       return;
     }
@@ -155,6 +154,7 @@ class SampleLogitsCUDAKernel :
 
     // get necessary outputs
     Tensor* samples = context.Output<Tensor>("Samples");
+    Tensor* probabilities = context.Output<Tensor>("Probabilities");
     Tensor* sampled_logits = context.Output<Tensor>("SampledLogits");
     Tensor* sampled_label = context.Output<Tensor>("SampledLabel");
 
@@ -176,9 +176,10 @@ class SampleLogitsCUDAKernel :
     auto& dev_ctx = context.cuda_device_context();
 
     // UNDERSTAND: allocate memories for temporaries
-    Tensor probabilities_tmp;
-    Tensor* probabilities = &probabilities_tmp;
     sampled_logits->mutable_data<T>(samples_dim, context.GetPlace());
+    math::SetConstant<platform::CUDADeviceContext, T> set_zero;
+    set_zero(dev_ctx, sampled_logits, static_cast<T>(0));
+
     auto sampled_label_data =
         sampled_label->mutable_data<int64_t>(label_dim, context.GetPlace());
     int threads = 512;
@@ -241,7 +242,6 @@ class SampleLogitsCUDAKernel :
         (smp_logits - probs.log().unaryExpr(TolerableValue<T>()))
             .unaryExpr(TolerableValue<T>());
     Print<T>(*sampled_logits, std::string("sampled_logits_res"));
-
   }
 };
 
@@ -251,7 +251,6 @@ class SampleLogitsGradCUDAKernel : public framework::OpKernel<T> {
   using Tensor = framework::Tensor;
   template <typename type>
   void Print(const Tensor & t, std::string name) const {
-    return;
     if (!FLAGS_debug_print) {
       return;
     }

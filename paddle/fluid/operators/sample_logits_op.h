@@ -154,6 +154,7 @@ class SampleLogitsKernel : public framework::OpKernel<T> {
 
     // get necessary outputs
     Tensor* samples = context.Output<Tensor>("Samples");
+    Tensor* probabilities = context.Output<Tensor>("Probabilities");
     Tensor* sampled_logits = context.Output<Tensor>("SampledLogits");
     Tensor* sampled_label = context.Output<Tensor>("SampledLabel");
 
@@ -175,8 +176,6 @@ class SampleLogitsKernel : public framework::OpKernel<T> {
         context.template device_context<platform::CPUDeviceContext>();
 
     // UNDERSTAND: allocate memories for temporaries
-    Tensor probabilities_tmp;
-    Tensor* probabilities = &probabilities_tmp;
     sampled_logits->mutable_data<T>(samples_dim, context.GetPlace());
     auto sampled_label_data =
         sampled_label->mutable_data<int64_t>(label_dim, context.GetPlace());

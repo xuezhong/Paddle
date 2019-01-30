@@ -65,7 +65,7 @@ __device__ float GPULogUniformSampler::Probability(int64_t value, const float lo
 
 
 template<typename T>
-__global__ void SamplingCondidate(const size_t n, const int* num_tries, const int range, const float log_range, const int num_true, const std::size_t num_samples, 
+__global__ void SamplingCondidate(const size_t n, const int num_tries, const int range, const float log_range, const int num_true, const std::size_t num_samples, 
     const int64_t* label_data, int64_t* samples_data, T* probabilities_data) {
   const int num_sampled_classes = num_true + num_samples;
 
@@ -78,46 +78,37 @@ __global__ void SamplingCondidate(const size_t n, const int* num_tries, const in
     int row_idx = idx / num_sampled_classes;
     if (col_idx < num_true) {
       samples_data[idx] = label_data[row_idx * num_true + col_idx];
-      probabilities_data[idx] = sampler.Probability(samples_data[idx], log_range);
-      probabilities_data[idx] = gpu_adjust_prob(
-        probabilities_data[idx], num_samples, num_tries[0]);
-
     } else {
       samples_data[idx] = samples_data[col_idx];
-      probabilities_data[idx] = probabilities_data[col_idx];
-      probabilities_data[idx] = gpu_adjust_prob(
-          probabilities_data[idx], num_samples, num_tries[0]);
     }
+    probabilities_data[idx] = sampler.Probability(samples_data[idx], log_range);
+    probabilities_data[idx] = gpu_adjust_prob(
+        probabilities_data[idx], num_samples, num_tries);
   } 
 }
 
 template<typename T>
-__global__ void UniqSampler(const size_t n, const int seed, const int range, const float log_range, 
-    const int num_true, const std::size_t num_samples, int* num_tries, bool* dict_data,
-    int64_t* samples_data, T* probabilities_data) {
-  thrust::minstd_rand rng;
-  //rng.seed(seed);
-  thrust::uniform_real_distribution<float> dist(0, 1);
-  const int num_sampled_classes = num_true + num_samples;
-
-  GPULogUniformSampler sampler;
-
-  int row_idx = 0;
+int UniqSampler(const Sampler& sampler,
+    const std::size_t num_samples,
+    int64_t* samples_data) {
    
-  // n == 1
-  int j = num_true;
-
-  while (j < num_samples + num_true) {
-    ++(*num_tries);
-    int idx = row_idx * num_sampled_classes + j;
-    auto v = sampler.Sample(dist(rng), range, log_range);
-    if (dict_data[v] == false) {
-      samples_data[idx] = v;
-      dict_data[v] = true;
-      probabilities_data[idx] = sampler.Probability(samples_data[idx], log_range);
+    // sample num_samles unique samples for an example, note that they are not
+    // all negative samples
+    std::unordered_set<int64_t> tmp_samples;
+    tmp_samples.clear();
+    int num_tries = 0;
+    int j = 0;
+    while (j < num_samples) {
+      ++num_tries;
+      auto v = sampler.Sample();
+      auto insert_ok = tmp_samples.insert(v).second;
+      if (!insert_ok) {
+        continue;
+      }
+      samples_data[j] = v;
       ++j;
     }
-  }
+    return num_tries; 
 }
 /*
 template <typename T>
@@ -148,9 +139,7 @@ void Print(Tensor & t, std::string name) {
 }*/
 
 template <typename T>
-void GPUSampleWithProb<T>::operator()(const platform::CUDADeviceContext& context, const int seed, const int dict_size, const bool uniq,
-                  const std::size_t num_samples, const Tensor* L, Tensor* S,
-                  Tensor* P) {
+void GPUSampleWithProb<T>::operator()(const platform::CUDADeviceContext& context, const int seed, const int dict_size, const bool uniq, const std::size_t num_samples, const Tensor* L, Tensor* S, Tensor* P) {
     // UNDERSTAND: dimension issues
     const auto lbl_dim = L->dims();
     const int batch_size = lbl_dim[0];
@@ -160,37 +149,28 @@ void GPUSampleWithProb<T>::operator()(const platform::CUDADeviceContext& context
 
     // UNDERSTAND: raw data view
     const int64_t* label_data = L->data<int64_t>();
-    int64_t* samples_data =
-        S->mutable_data<int64_t>(ret_dim, context.GetPlace());
-    T* probabilities_data = P->mutable_data<T>(ret_dim, context.GetPlace());
+    int64_t* samples_data = S->data<int64_t>();
+    T* probabilities_data = P->data<T>();
     
-    framework::DDim dict_dim{dict_size};
-    Tensor dict;
-    bool* dict_data =
-      dict.mutable_data<bool>(dict_dim, context.GetPlace()); 
-    math::SetConstant<platform::CUDADeviceContext, bool> set_zero;
-    set_zero(context, &dict, false);
+    int s_size = num_samples; 
+    framework::DDim s_dim{s_size};
+    Tensor s;
+    int64_t* s_data =
+      s.mutable_data<int64_t>(s_dim, platform::CPUPlace()); 
 
-    framework::DDim num_tries_dim{1};
-    Tensor num_tries;
-    int* num_tries_data =
-      num_tries.mutable_data<int>(num_tries_dim, context.GetPlace()); 
-    math::SetConstant<platform::CUDADeviceContext, int> set_zero2;
-    set_zero2(context, &num_tries, static_cast<int>(0));
+    math::LogUniformSampler sampler(dict_size, seed);
 
     int range = dict_size;
     float log_range = log(range + 1);
 
-    int threads = 1;
-    int grid = 1;
-    size_t size= 1;
-    UniqSampler<T><<<grid, threads, 0, context.stream()>>>(size, seed, range, log_range, num_true, num_samples, num_tries_data, dict_data, samples_data, probabilities_data);
+    int num_tries = UniqSampler<T>(sampler, num_samples, s_data);
+    VLOG(1) << "num_tries: " << num_tries;
+    PADDLE_ENFORCE(cudaMemcpy(samples_data + num_true, s_data, sizeof(int64_t) * num_samples, cudaMemcpyHostToDevice));
       
-    //Print<int>(num_tries, "num_tries");
-    threads = 512;
-    size = batch_size * num_sampled_classes; 
-    grid = (batch_size * num_sampled_classes + threads - 1) / threads;
-    SamplingCondidate<T><<<grid, threads, 0, context.stream()>>>(size, num_tries_data, range, log_range, num_true, num_samples, label_data, samples_data, probabilities_data);
+    int threads = 512;
+    const size_t size = batch_size * num_sampled_classes; 
+    int grid = (batch_size * num_sampled_classes + threads - 1) / threads;
+    SamplingCondidate<T><<<grid, threads, 0, context.stream()>>>(size, num_tries, range, log_range, num_true, num_samples, label_data, samples_data, probabilities_data);
 };
 
 template class GPUSampleWithProb<float>;
